@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YC: Alive or Dead?</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0a;
+  --card-bg: #111113;
+  --alive: #00ff88;
+  --dead: #ff3355;
+  --text: #f0f0f0;
+  --muted: #666;
+  --border: #222;
+  --orange: #ff6600;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.header {
+  text-align: center;
+  padding: 30px 20px 10px;
+}
+
+.header h1 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.header h1 .yc { color: var(--orange); }
+.header h1 .colon { color: var(--muted); }
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 8px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Score bar */
+.score-bar {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  padding: 16px 20px;
+  font-size: 0.85rem;
+}
+
+.score-item { display: flex; align-items: center; gap: 6px; }
+.score-item .label { color: var(--muted); }
+.score-item .value { font-weight: 700; }
+.score-item .value.streak { color: var(--orange); }
+
+/* Progress dots */
+.progress-bar {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 20px 20px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.3s ease;
+}
+
+.dot.correct { background: var(--alive); box-shadow: 0 0 8px var(--alive); }
+.dot.wrong { background: var(--dead); box-shadow: 0 0 8px var(--dead); }
+.dot.current { background: var(--muted); transform: scale(1.3); }
+
+/* Card */
+.card-container {
+  display: flex;
+  justify-content: center;
+  padding: 0 20px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--orange);
+}
+
+.batch-tag {
+  display: inline-block;
+  background: rgba(255, 102, 0, 0.12);
+  color: var(--orange);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.company-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  line-height: 1.1;
+  margin-bottom: 14px;
+  letter-spacing: -0.5px;
+}
+
+.company-desc {
+  color: #aaa;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  border-left: 2px solid var(--border);
+  padding-left: 14px;
+}
+
+.company-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.meta-icon { font-size: 0.9rem; }
+
+/* Buttons */
+.btn-row {
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  flex: 1;
+  padding: 16px;
+  border: 2px solid;
+  border-radius: 10px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+}
+
+.btn-alive {
+  border-color: var(--alive);
+  color: var(--alive);
+}
+
+.btn-alive:hover {
+  background: var(--alive);
+  color: var(--bg);
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.25);
+}
+
+.btn-dead {
+  border-color: var(--dead);
+  color: var(--dead);
+}
+
+.btn-dead:hover {
+  background: var(--dead);
+  color: var(--bg);
+  box-shadow: 0 0 30px rgba(255, 51, 85, 0.25);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Result overlay */
+.result-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  padding: 30px;
+  text-align: center;
+  border-radius: 16px;
+}
+
+.result-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.result-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.result-text {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.5rem;
+  margin-bottom: 6px;
+}
+
+.result-detail {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  max-width: 300px;
+  margin-bottom: 20px;
+}
+
+.btn-next {
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: transform 0.2s;
+}
+
+.btn-next:hover { transform: scale(1.05); }
+
+/* Game Over */
+.game-over {
+  display: none;
+  text-align: center;
+  padding: 40px 20px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.game-over.show { display: block; }
+
+.final-score {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 4rem;
+  color: var(--orange);
+  line-height: 1;
+}
+
+.final-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 8px;
+  margin-bottom: 24px;
+}
+
+.final-grade {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1.3rem;
+  margin-bottom: 30px;
+}
+
+.btn-restart {
+  background: var(--orange);
+  color: var(--bg);
+  border: none;
+  padding: 14px 40px;
+  border-radius: 10px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-restart:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(255, 102, 0, 0.3);
+}
+
+/* Animations */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.card.enter { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+.card.shake {
+  animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.card.correct-flash { box-shadow: 0 0 40px rgba(0, 255, 136, 0.2); border-color: var(--alive); }
+.card.wrong-flash { box-shadow: 0 0 40px rgba(255, 51, 85, 0.2); border-color: var(--dead); }
+
+/* Responsive */
+@media (max-width: 500px) {
+  .card { padding: 24px; }
+  .btn { padding: 14px 8px; font-size: 0.85rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="yc">YC</span><span class="colon">:</span> Alive or Dead<span class="colon">?</span></h1>
+  <div class="subtitle">Can you tell which startups survived?</div>
+</div>
+
+<div class="score-bar">
+  <div class="score-item">
+    <span class="label">Score</span>
+    <span class="value" id="score">0</span><span class="value">/</span><span class="value" id="total">0</span>
+  </div>
+  <div class="score-item">
+    <span class="label">Streak</span>
+    <span class="value streak" id="streak">0 🔥</span>
+  </div>
+  <div class="score-item">
+    <span class="label">Round</span>
+    <span class="value" id="round">1</span><span class="value">/15</span>
+  </div>
+</div>
+
+<div class="progress-bar" id="progressBar"></div>
+
+<div class="card-container" id="cardContainer">
+  <div class="card enter" id="card">
+    <div class="batch-tag" id="batch"></div>
+    <div class="company-name" id="companyName"></div>
+    <div class="company-desc" id="companyDesc"></div>
+    <div class="company-meta" id="companyMeta"></div>
+    <div class="btn-row">
+      <button class="btn btn-alive" id="btnAlive" onclick="guess('alive')">🟢 Alive</button>
+      <button class="btn btn-dead" id="btnDead" onclick="guess('dead')">💀 Dead</button>
+    </div>
+    <div class="result-overlay" id="resultOverlay">
+      <div class="result-icon" id="resultIcon"></div>
+      <div class="result-text" id="resultText"></div>
+      <div class="result-detail" id="resultDetail"></div>
+      <button class="btn-next" onclick="nextRound()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<div class="game-over" id="gameOver">
+  <div class="final-score" id="finalScore"></div>
+  <div class="final-label">Correct Guesses</div>
+  <div class="final-grade" id="finalGrade"></div>
+  <button class="btn-restart" onclick="restartGame()">Play Again</button>
+</div>
+
+<script>
+const COMPANIES = [
+  { name: "Airbnb", batch: "W09", desc: "Online marketplace for short-term lodging and tourism experiences. Started by renting air mattresses in a San Francisco apartment.", status: "alive", detail: "Worth $80B+. One of YC's biggest successes.", founded: "2008", category: "Marketplace" },
+  { name: "Dropbox", batch: "S07", desc: "Cloud file storage and synchronization service. Drew Houston famously kept forgetting his USB drive.", status: "alive", detail: "Public company (DBX). $10B+ market cap.", founded: "2007", category: "Cloud Storage" },
+  { name: "Stripe", batch: "S09", desc: "Online payment processing platform for internet businesses. Built by two Irish brothers from Limerick.", status: "alive", detail: "Worth $65B+. Powers payments for millions of businesses.", founded: "2010", category: "Fintech" },
+  { name: "Coinbase", batch: "S12", desc: "Cryptocurrency exchange platform allowing users to buy, sell, and store digital currencies.", status: "alive", detail: "Public company (COIN). Largest US crypto exchange.", founded: "2012", category: "Crypto" },
+  { name: "Twitch", batch: "W07", desc: "Live streaming platform focused on video game live streaming, originally called Justin.tv.", status: "alive", detail: "Acquired by Amazon for $970M in 2014.", founded: "2011", category: "Streaming" },
+  { name: "Reddit", batch: "S05", desc: "Social news aggregation and discussion forum. The 'front page of the internet.'", status: "alive", detail: "IPO'd in 2024. One of the most visited sites globally.", founded: "2005", category: "Social Media" },
+  { name: "DoorDash", batch: "S13", desc: "Food delivery platform connecting customers with local restaurants for on-demand delivery.", status: "alive", detail: "Public company (DASH). $50B+ market cap.", founded: "2013", category: "Delivery" },
+  { name: "Instacart", batch: "S12", desc: "Grocery delivery and pick-up service operating across North America via a network of shoppers.", status: "alive", detail: "IPO'd in 2023. Valued at ~$10B.", founded: "2012", category: "Delivery" },
+  { name: "Zapier", batch: "S12", desc: "No-code automation platform that connects different web applications and automates workflows.", status: "alive", detail: "Bootstrapped to $5B valuation. Profitable.", founded: "2011", category: "Automation" },
+  { name: "Pebble", batch: "S11", desc: "Smartwatch maker that broke Kickstarter records. Pioneered the modern smartwatch category before Apple Watch.", status: "dead", detail: "Sold assets to Fitbit in 2016 for ~$23M after failing to compete with Apple Watch.", founded: "2012", category: "Hardware" },
+  { name: "Kiko", batch: "S05", desc: "Web-based calendar application. One of the earliest YC companies from the very first batch.", status: "dead", detail: "Couldn't compete with Google Calendar. Sold on eBay for $258K in 2006.", founded: "2005", category: "Productivity" },
+  { name: "Homejoy", batch: "S10", desc: "On-demand home cleaning service that matched customers with professional cleaners.", status: "dead", detail: "Shut down in 2015 due to contractor misclassification lawsuits and customer retention issues.", founded: "2012", category: "Services" },
+  { name: "Exec", batch: "S12", desc: "On-demand personal assistant and cleaning service. Tried to be Uber for errands and cleaning.", status: "dead", detail: "Acquired by Handy in 2014 after struggling with unit economics.", founded: "2012", category: "Services" },
+  { name: "Optimizely", batch: "S10", desc: "A/B testing and experimentation platform helping companies optimize digital experiences.", status: "alive", detail: "Acquired by Episerver for $600M in 2020. Still operating.", founded: "2010", category: "MarTech" },
+  { name: "Matterport", batch: "W12", desc: "3D spatial data platform that turns real-life spaces into digital twins using camera technology.", status: "alive", detail: "Went public via SPAC. Leading 3D capture platform.", founded: "2011", category: "3D/Spatial" },
+  { name: "Watsi", batch: "W13", desc: "Crowdfunding platform for healthcare, allowing donors to fund medical treatments for people in need worldwide.", status: "alive", detail: "First nonprofit in YC. Still operating and funding treatments.", founded: "2012", category: "Nonprofit" },
+  { name: "Scribd", batch: "S06", desc: "Digital reading subscription service offering access to books, audiobooks, magazines, and documents.", status: "alive", detail: "Valued at $1B+. The 'Netflix of books.'", founded: "2007", category: "Media" },
+  { name: "Loopt", batch: "S05", desc: "Mobile location-sharing social networking app. Early pioneer in GPS-based social features.", status: "dead", detail: "Acquired by Green Dot Corporation for $43.4M in 2012, then shut down.", founded: "2005", category: "Social" },
+  { name: "Disqus", batch: "S07", desc: "Blog comment hosting and moderation platform used by millions of websites worldwide.", status: "dead", detail: "Acquired by Zeta Global in 2017. Largely irrelevant now.", founded: "2007", category: "Publishing" },
+  { name: "Weebly", batch: "W07", desc: "Drag-and-drop website builder for small businesses and personal sites.", status: "dead", detail: "Acquired by Square for $365M in 2018. Being sunset in favor of Square Online.", founded: "2006", category: "Website Builder" },
+  { name: "Ginkgo Bioworks", batch: "S14", desc: "Synthetic biology company that engineers custom organisms for industrial applications.", status: "alive", detail: "Public company (DNA). Pioneer in cell programming.", founded: "2008", category: "Biotech" },
+  { name: "Zenefits", batch: "S13", desc: "Cloud-based HR platform offering payroll, benefits, and compliance tools for small businesses.", status: "dead", detail: "Imploded after compliance scandals. Sold to TriNet in 2022.", founded: "2013", category: "HR Tech" },
+  { name: "Codecademy", batch: "S11", desc: "Interactive online platform teaching coding and programming through hands-on exercises.", status: "alive", detail: "Acquired by Skillsoft for $525M in 2022.", founded: "2011", category: "EdTech" },
+  { name: "Rappi", batch: "W16", desc: "Latin American super-app for delivery of food, groceries, medicine, and more.", status: "alive", detail: "Valued at $5B+. Dominant delivery platform in LatAm.", founded: "2015", category: "Delivery" },
+  { name: "Threadless", batch: "S06", desc: "Community-driven t-shirt company where users submit and vote on designs.", status: "dead", detail: "Never scaled beyond niche. Pivoted multiple times, largely faded.", founded: "2000", category: "E-commerce" },
+  { name: "Cruise", batch: "W14", desc: "Self-driving car technology company developing autonomous vehicles for ride-hailing.", status: "alive", detail: "Acquired by GM. Valued at $30B at peak, though faced major setbacks.", founded: "2013", category: "Autonomous Vehicles" },
+  { name: "Pagerduty", batch: "S10", desc: "Incident management platform that helps IT teams detect and respond to operational issues.", status: "alive", detail: "Public company (PD). Essential DevOps infrastructure.", founded: "2009", category: "DevOps" },
+  { name: "Mixpanel", batch: "S09", desc: "Product analytics platform tracking user interactions with web and mobile applications.", status: "alive", detail: "Valued at $1B+. Competes with Amplitude.", founded: "2009", category: "Analytics" },
+  { name: "Sprig", batch: "S19", desc: "User research platform combining surveys, replays, and AI analysis for product teams.", status: "alive", detail: "Growing fast in the product research space.", founded: "2019", category: "Research" },
+  { name: "Scentbird", batch: "S15", desc: "Monthly subscription service for designer perfume and cologne samples.", status: "alive", detail: "Still operating. Niche but surviving in fragrance subscriptions.", founded: "2014", category: "D2C" },
+  { name: "VidYard", batch: "S11", desc: "Video hosting and analytics platform for businesses, focused on sales and marketing use cases.", status: "alive", detail: "Still operating. Leading B2B video platform.", founded: "2011", category: "Video" },
+  { name: "Standard Treasury", batch: "S13", desc: "Banking-as-a-service API platform that aimed to modernize how banks interact with fintech.", status: "dead", detail: "Acquired by Silicon Valley Bank in 2015, then shut down.", founded: "2013", category: "Fintech" },
+  { name: "Panorama Education", batch: "S13", desc: "K-12 education data analytics platform measuring student social-emotional learning and engagement.", status: "alive", detail: "Raised $60M+. Used by 25% of US school districts.", founded: "2012", category: "EdTech" },
+  { name: "MessageMe", batch: "W13", desc: "Mobile messaging app with rich media sharing — stickers, doodles, and music clips.", status: "dead", detail: "Acquired by Yahoo in 2014. Shut down shortly after.", founded: "2013", category: "Messaging" },
+  { name: "Sourceress", batch: "S17", desc: "AI-powered recruiting tool that automated candidate sourcing for engineering roles.", status: "dead", detail: "Shut down in 2020. Couldn't sustain growth.", founded: "2017", category: "Recruiting" },
+];
+
+const ROUNDS = 15;
+let currentRound = 0;
+let score = 0;
+let streak = 0;
+let maxStreak = 0;
+let gameCompanies = [];
+let answered = false;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function initProgress() {
+  const bar = document.getElementById('progressBar');
+  bar.innerHTML = '';
+  for (let i = 0; i < ROUNDS; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot' + (i === 0 ? ' current' : '');
+    dot.id = `dot-${i}`;
+    bar.appendChild(dot);
+  }
+}
+
+function loadCompany() {
+  const c = gameCompanies[currentRound];
+  const card = document.getElementById('card');
+  
+  card.classList.remove('enter', 'shake', 'correct-flash', 'wrong-flash');
+  void card.offsetWidth;
+  card.classList.add('enter');
+  
+  document.getElementById('batch').textContent = c.batch;
+  document.getElementById('companyName').textContent = c.name;
+  document.getElementById('companyDesc').textContent = c.desc;
+  
+  document.getElementById('companyMeta').innerHTML = `
+    <div class="meta-item"><span class="meta-icon">📅</span> Founded ${c.founded}</div>
+    <div class="meta-item"><span class="meta-icon">🏷️</span> ${c.category}</div>
+  `;
+  
+  document.getElementById('resultOverlay').classList.remove('show');
+  document.getElementById('btnAlive').disabled = false;
+  document.getElementById('btnDead').disabled = false;
+  document.getElementById('round').textContent = currentRound + 1;
+  answered = false;
+}
+
+function guess(choice) {
+  if (answered) return;
+  answered = true;
+  
+  const c = gameCompanies[currentRound];
+  const correct = choice === c.status;
+  const card = document.getElementById('card');
+  const dot = document.getElementById(`dot-${currentRound}`);
+  
+  document.getElementById('btnAlive').disabled = true;
+  document.getElementById('btnDead').disabled = true;
+  
+  if (correct) {
+    score++;
+    streak++;
+    if (streak > maxStreak) maxStreak = streak;
+    card.classList.add('correct-flash');
+    dot.className = 'dot correct';
+    document.getElementById('resultIcon').textContent = '✅';
+    document.getElementById('resultText').textContent = 'Correct!';
+    document.getElementById('resultText').style.color = 'var(--alive)';
+  } else {
+    streak = 0;
+    card.classList.add('shake', 'wrong-flash');
+    dot.className = 'dot wrong';
+    document.getElementById('resultIcon').textContent = '❌';
+    document.getElementById('resultText').textContent = 'Wrong!';
+    document.getElementById('resultText').style.color = 'var(--dead)';
+  }
+  
+  const statusEmoji = c.status === 'alive' ? '🟢 Alive' : '💀 Dead';
+  document.getElementById('resultDetail').innerHTML = `
+    <strong>${c.name}</strong> is <strong>${statusEmoji}</strong><br><br>${c.detail}
+  `;
+  
+  document.getElementById('score').textContent = score;
+  document.getElementById('total').textContent = currentRound + 1;
+  document.getElementById('streak').textContent = streak + ' 🔥';
+  
+  setTimeout(() => {
+    document.getElementById('resultOverlay').classList.add('show');
+  }, 400);
+}
+
+function nextRound() {
+  currentRound++;
+  if (currentRound >= ROUNDS) {
+    endGame();
+    return;
+  }
+  
+  const nextDot = document.getElementById(`dot-${currentRound}`);
+  if (nextDot) nextDot.classList.add('current');
+  
+  loadCompany();
+}
+
+function endGame() {
+  document.getElementById('cardContainer').style.display = 'none';
+  const go = document.getElementById('gameOver');
+  go.classList.add('show');
+  
+  document.getElementById('finalScore').textContent = `${score}/${ROUNDS}`;
+  
+  const pct = score / ROUNDS;
+  let grade = '';
+  if (pct === 1) grade = '🏆 Perfect! You should be a YC partner.';
+  else if (pct >= 0.8) grade = '🔥 Impressive! You know your startups.';
+  else if (pct >= 0.6) grade = '👍 Not bad. You follow the game.';
+  else if (pct >= 0.4) grade = '😬 Mid. Time to read more TechCrunch.';
+  else grade = '💀 Rough. Maybe stick to FAANG.';
+  
+  if (maxStreak >= 5) grade += `<br><br>Best streak: ${maxStreak} in a row!`;
+  
+  document.getElementById('finalGrade').innerHTML = grade;
+}
+
+function restartGame() {
+  currentRound = 0;
+  score = 0;
+  streak = 0;
+  maxStreak = 0;
+  
+  document.getElementById('cardContainer').style.display = 'flex';
+  document.getElementById('gameOver').classList.remove('show');
+  document.getElementById('score').textContent = '0';
+  document.getElementById('total').textContent = '0';
+  document.getElementById('streak').textContent = '0 🔥';
+  
+  startGame();
+}
+
+function startGame() {
+  gameCompanies = shuffle(COMPANIES).slice(0, ROUNDS);
+  initProgress();
+  loadCompany();
+}
+
+startGame();
+</script>
+
+</body>
+</html>
